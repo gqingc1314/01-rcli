@@ -98,7 +98,60 @@ git branch -u origin/main  # 设置 git push 默认推给 origin
 
 ---
 
-## 5. 对话中产生的其他知识点
+## 5. Rust 命令行工具开发实战
+
+### 5.1 命令行参数解析 (Clap)
+*   **结构体嵌套**：`Opts` (主入口) -> `SubCommand` (子命令枚举) -> `CsvOpts` (具体参数)。
+*   **派生宏**：使用 `#[derive(Parser)]` 自动生成 CLI 逻辑。
+*   **模块化重构**：将代码拆分为 `opts.rs` (定义参数) 和 `process.rs` (业务逻辑)，并在 `lib.rs` 中统一导出。
+
+### 5.2 数据处理 (Serde & CSV)
+*   **Rename 技巧**：CSV 表头包含空格（如 "Kit Number"），但 Rust 字段名不能有空格。
+    ```rust
+    #[serde(rename = "Kit Number")]
+    pub kit: u8,
+    ```
+*   **PascalCase**：使用 `#[serde(rename_all = "PascalCase")]` 批量处理字段名大小写映射。
+*   **CSV 读取**：使用 `csv::Reader` 迭代处理每一行记录。
+
+### 5.3 错误处理 (Anyhow)
+*   **Result 别名**：使用 `anyhow::Result<()>` 简化函数签名。
+*   **问号操作符**：`?` 自动传播错误。
+
+---
+
+## 6. Rust 生态与工具链
+
+### 6.1 依赖检查 (Cargo Deny)
+*   **作用**：检查依赖树中的许可证 (License) 冲突、已知漏洞 (Advisories) 和被禁止的包。
+*   **报错修复**：
+    *   `unlicensed`: 在 `Cargo.toml` 中添加 `license = "MIT"`。
+    *   `cargo deny check`: 运行检查命令。
+
+### 6.2 测试与 CI 增强
+*   **Cargo Nextest**：更快的测试运行器。
+    *   技巧：使用 `--no-tests=pass` 防止因无测试用例导致的 CI 失败（在 `.pre-commit-config.yaml` 和 `build.yml` 中都要配置）。
+*   **Tokei**：代码行数统计工具 (`cargo install tokei`)。
+
+### 6.3 Pre-commit
+*   **作用**：在 `git commit` 前自动运行格式化、Lint 和测试。
+*   **配置**：`.pre-commit-config.yaml`。
+
+---
+
+## 7. 系统与杂项
+
+### 7.1 Linux 工具安装
+*   **DuckDB**：高性能分析型数据库 CLI。
+    *   技巧：下载 Zip 包 -> 解压 -> 移动到 `/usr/local/bin` 或 `~/.cargo/bin`。
+
+### 7.2 Windows 系统管理 (问答记录)
+*   **hiberfil.sys**：系统休眠文件，可占用数 GB 空间。可通过 `powercfg -h off` 关闭并删除。
+*   **桌面迁移**：通过“属性 -> 位置 -> 移动”将桌面文件夹迁移到 D 盘。
+
+---
+
+## 8. 对话中产生的其他知识点
 *   **Changelog 生成位置**：在 GitHub Actions 运行时的虚拟环境中生成，直接发布到 Release，不污染代码库。
 *   **Conventional Commits**：一种提交规范 (如 `fix(ci): ...`)，`git-cliff` 依赖它来自动分类生成日志。
 *   **Trae 对话保存**：Trae 自动保存历史，但建议手动将重要内容整理成文档 (如本文档) 并提交到仓库存档。
