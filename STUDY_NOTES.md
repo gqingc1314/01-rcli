@@ -133,9 +133,30 @@ git branch -u origin/main  # 设置 git push 默认推给 origin
     *   技巧：使用 `--no-tests=pass` 防止因无测试用例导致的 CI 失败（在 `.pre-commit-config.yaml` 和 `build.yml` 中都要配置）。
 *   **Tokei**：代码行数统计工具 (`cargo install tokei`)。
 
-### 6.3 Pre-commit
-*   **作用**：在 `git commit` 前自动运行格式化、Lint 和测试。
-*   **配置**：`.pre-commit-config.yaml`。
+### 6.3 Pre-commit 工作流与故障排查
+*   **机制**：Pre-commit 钩子会在 `git commit` 时拦截操作。
+*   **常见报错分析 (cargo-fmt)**：
+    *   **现象**：Exit code 1，并在终端打印出大量 Diff (红色 `-` 和绿色 `+`)。
+    *   **原因**：配置文件中设定了 `entry: bash -c 'cargo fmt -- --check'`。`--check` 参数意味着“只检查不修改”，如果有格式问题直接报错。
+    *   **解决**：手动运行 `cargo fmt` (不带 check)，让工具自动修复代码格式，然后再次 `git add` 和 `commit`。
+
+### 6.4 代码模块化重构细节 (Facade 模式)
+在 `Terminal#497-626` 的 Diff 中，我们看到了清晰的模块化结构：
+1.  **src/lib.rs (门面)**：
+    ```rust
+    mod opts;
+    mod process;
+    pub use opts::{Opts, SubCommand}; // 重新导出，对外隐藏内部结构
+    pub use process::process_csv;
+    ```
+2.  **src/main.rs (消费者)**：
+    只需要一行 `use rcli::{Opts, SubCommand, process_csv};` 即可使用所有功能，不再关心具体实现细节。
+
+### 6.5 Clap 参数高级属性
+在 `src/opts.rs` 中我们使用了几个高级属性：
+*   `#[arg(short, long, value_parser=verify_input_file)]`: 绑定自定义校验函数，在解析参数时直接检查文件是否存在。
+*   `#[arg(default_value_t = true)]`: 对于布尔值或数字等原生类型，使用 `_t` 后缀可以直接指定默认值字面量，无需转换为字符串。
+
 
 ---
 
