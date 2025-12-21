@@ -157,7 +157,6 @@ git branch -u origin/main  # 设置 git push 默认推给 origin
 *   `#[arg(short, long, value_parser=verify_input_file)]`: 绑定自定义校验函数，在解析参数时直接检查文件是否存在。
 *   `#[arg(default_value_t = true)]`: 对于布尔值或数字等原生类型，使用 `_t` 后缀可以直接指定默认值字面量，无需转换为字符串。
 
-
 ---
 
 ## 7. 系统与杂项
@@ -176,3 +175,34 @@ git branch -u origin/main  # 设置 git push 默认推给 origin
 *   **Changelog 生成位置**：在 GitHub Actions 运行时的虚拟环境中生成，直接发布到 Release，不污染代码库。
 *   **Conventional Commits**：一种提交规范 (如 `fix(ci): ...`)，`git-cliff` 依赖它来自动分类生成日志。
 *   **Trae 对话保存**：Trae 自动保存历史，但建议手动将重要内容整理成文档 (如本文档) 并提交到仓库存档。
+
+---
+
+## 9. 深度技术解析 (Rust 硬核知识点)
+
+### 9.1 所有权与借用 (The Hard Parts)
+*   **CSV Reader 的 `.clone()` 问题**：
+    *   `reader.headers()` 返回的是 `reader` 内部的引用，此时 `reader` 被不可变借用。
+    *   `reader.records()` 需要修改 `reader` 内部状态，需要可变借用。
+    *   **冲突**：不能在持有不可变引用的同时进行可变借用。
+    *   **解决**：使用 `.clone()` 将表头数据复制出来，切断与 `reader` 的借用关系。
+
+### 9.2 Serde 生态与通用编程
+*   **Value 的通用性**：`serde_json::Value` 实现了 `Serialize` trait，因此它可以被 `serde_yaml` 或 `toml` 序列化。
+*   **序列化 vs 反序列化**：
+    *   **序列化 (S -> Save)**：内存对象 -> 字符串/字节 (为了存储/传输)。
+    *   **反序列化 (De -> Decode)**：字符串/字节 -> 内存对象 (为了使用)。
+
+### 9.3 Rust 习惯用法 (Idioms)
+*   **From vs Into**：
+    *   `From` (构造者)：`String::from("hello")`。
+    *   `Into` (转换者)：`"hello".into()`。
+    *   **规则**：实现 `From` 会自动获得 `Into`。作为函数参数约束时，优先使用 `Into` 以获得更广泛的兼容性。
+*   **FromStr**：必须显式定义 `type Err` 关联类型。
+*   **Anyhow**：在应用层开发中，使用 `type Err = anyhow::Error` 可以极大简化错误定义，并利用 `anyhow!` 宏快速构造错误。
+
+### 9.4 TOML 格式陷阱
+*   **问题**：`Error: unsupported array type`。
+*   **原因**：TOML 文件的根节点必须是键值对 (Table)，不能直接是一个数组 (Array)。JSON 和 YAML 允许根节点是数组，但 TOML 不允许。
+*   **解决**：将数组包装在一个 Map 中，例如 `{ "items": [...] }`。
+*   **语法**：`[[items]]` 表示向名为 `items` 的数组中追加一个对象 (Table)。
