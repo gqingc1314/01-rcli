@@ -157,6 +157,47 @@ git branch -u origin/main  # 设置 git push 默认推给 origin
 *   `#[arg(short, long, value_parser=verify_input_file)]`: 绑定自定义校验函数，在解析参数时直接检查文件是否存在。
 *   `#[arg(default_value_t = true)]`: 对于布尔值或数字等原生类型，使用 `_t` 后缀可以直接指定默认值字面量，无需转换为字符串。
 
+### 6.6 Clap 子命令层级与命令行约定
+*   **命令行是树结构**：`Opts`(根) -> `cmd` 字段(子命令入口) -> `SubCommand`/`SubCommand_Cmd`(枚举分支) -> `XxxOpts`(该子命令自己的参数)。
+*   **`cmd` vs `#[command(subcommand)]`**：
+    *   `pub cmd: SubCommand` 是 Rust 结构体字段，用来承载“用户选了哪个子命令”。
+    *   `#[command(subcommand)]` 是给 clap 的标记：告诉 clap 这里要按“子命令”解析，而不是 `--cmd ...` 这种普通参数。
+*   **二级子命令**：枚举变体上写 `#[command(subcommand)] Base64(Base64SubCommand)`，含义是 `base64` 下面还有 `encode/decode` 等子命令；用法是 `rcli base64 encode ...`（不是 `--Base64SubCommand`）。
+*   **`-` / `--` / 单独的 `--`**：
+    *   `-i`：短选项（通常 1 个字母）。
+    *   `--input`：长选项（通常一个单词）。
+    *   单独的 `--`：结束选项解析，后续参数都当作位置参数（当你需要传入以 `-` 开头的值时常用）。
+*   **`default_value = "-"` 约定**：`"-"` 通常表示从 stdin 读取（或写到 stdout），用于“文件可选”的工具；若同时做文件存在性校验，校验函数一般需要对 `"-"` 特判放行。
+
+### 6.7 本次对话补充知识点
+*   **`default_value` vs `default_value_t`**：
+    *   `default_value = "standard"`：默认值是字符串，会走 `value_parser` / `FromStr` 解析流程（相当于用户输入了 `--format standard`）。
+    *   `default_value_t = Xxx::Standard`：默认值是类型值，更类型安全，通常要求类型能被 clap 展示（常见需要 `Display`）。
+*   **Bool 参数为什么不能写 `--uppercase=false`**：
+    *   默认情况下 `bool` 在 clap 里是“开关 flag”：出现 `--uppercase` 就设为 `true`，不出现就用默认值。
+    *   这种 flag 不接收值，所以 `--uppercase=false` 会被报成“unexpected value”。
+*   **嵌套 enum 的 match 与穷尽性**：
+    *   `SubCommandCmd::Base64(Base64SubCommand::Encode(opts))` 是同时匹配外层 enum + 内层 enum 的模式匹配。
+    *   Rust 要求 `match` 覆盖所有分支；注释掉 `Decode` 分支会触发 “non-exhaustive patterns” 编译错误，除非提供兜底分支。
+*   **`?` 运算符不只用于 `Result`**：
+    *   `?` 只能用于实现了 `Try` 的类型（最常见 `Result`、`Option`）。
+    *   `Option<T>` 上的 `?` 只能在返回 `Option` 的函数里用；若函数返回 `Result`，需要把 `Option` 转成 `Result`（如 `.ok_or(...)`）。
+*   **`.expect("msg")` 是带信息的 `unwrap`**：失败时 panic 并打印自定义消息，便于定位；前提是你“确信不会失败”或已做过前置检查。
+*   **`anyhow` 的核心价值**：
+    *   应用层统一错误类型：不同库的错误（`io::Error`、`csv::Error`、`serde_json::Error` 等）都能通过 `?` 自动装进 `anyhow::Error`。
+    *   用 `bail!` / `anyhow!` 做业务校验错误；用 `Context` 在 `?` 前加“出错时我在做什么”的上下文信息。
+*   **`rand` 的 `choose` “找不到方法”**：通常是因为提供该方法的 trait 没有 `use` 进作用域，需要按编译器提示引入对应 trait（比如 `IndexedRandom` / `SliceRandom`）。
+*   **Base64 的 `Engine as _` 写法**：
+    *   `URL_SAFE.encode(...)` 的 `encode` 是 trait 方法，不引入 trait 就不能用点号调用。
+    *   `use base64::Engine as _;` 的意思是“把 trait 引入作用域，但不暴露名字”，避免 unused import 警告。
+*   **`URL_SAFE` 是 Base64 的一种引擎/字母表**：把标准 Base64 的 `+`、`/` 改成 `-`、`_`，更适合放进 URL。
+*   **`String::from_utf8(decoded)?` 的前提**：Base64 解码得到的是字节；只有当内容确实是 UTF-8 文本时才能转成 `String`，否则会返回错误。
+*   **终端出现 `(END)` 如何退出**：这是分页器（如 `less`）界面，按 `q` 退出。
+*   **Rust Analyzer 宏报错但 `cargo check` 通过**：常见原因是 rust-analyzer 与 toolchain 的 proc-macro server 版本不匹配；IDE 会红但代码可编译，以 `cargo check` 为准。
+*   **Pre-commit “Failed 但显示 Fixing ...”**：
+    *   `end-of-file-fixer`、`trailing-whitespace` 这类钩子会自动改文件；改完就故意返回失败，要求你 `git add` 后重新提交。
+    *   `cargo fmt -- --check` 发现格式不符合也会失败，需要先 `cargo fmt` 再提交。
+
 ---
 
 ## 7. 系统与杂项

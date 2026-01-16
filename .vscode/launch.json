@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rcli'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=rcli",
+                    "--package=rcli"
+                ],
+                "filter": {
+                    "name": "rcli",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "base64",
+                "encode"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
